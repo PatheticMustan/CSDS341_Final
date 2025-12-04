@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>City Explorer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <header>
+        <h1>City Explorer</h1>
+    </header>
+    <nav>
+        <button onclick="showSection('list-section')">All Cities</button>
+        <button onclick="showSection('rankings-section')">Rankings</button>
+        <button onclick="showSection('add-city-section')">Add City</button>
+    </nav>
+
+    <main>
+        <section id="list-section" class="section active">
+            <h2>All Cities</h2>
+            <ul id="city-list">
+                <!-- Cities will be populated here -->
+            </ul>
+        </section>
+
+        <section id="details-section" class="section">
+            <button onclick="showSection('list-section')" style="margin-bottom: 1rem;">&larr; Back to List</button>
+            <div id="city-details" class="city-details">
+                <!-- Details will be populated here -->
+            </div>
+        </section>
+
+        <!-- Rankings Section -->
+        <section id="rankings-section" class="section">
+            <h2>City Rankings</h2>
+            <div class="form-group">
+                <label for="metric-select">Select Metric:</label>
+                <select id="metric-select" onchange="loadRankings()">
+                    <!-- Metrics will be populated here -->
+                </select>
+            </div>
+            <ul id="rankings-list">
+                <!-- Rankings will be populated here -->
+            </ul>
+        </section>
+
+        <section id="add-city-section" class="section">
+            <h2>Add New City</h2>
+            <form id="add-city-form" onsubmit="handleAddCity(event)">
+                <div class="form-group">
+                    <label for="city-name">City Name</label>
+                    <input type="text" id="city-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="city-state">State (2 letters)</label>
+                    <input type="text" id="city-state" maxlength="2" required style="text-transform: uppercase;">
+                </div>
+                <div id="add-city-metrics" class="metrics-inputs">
+                    <!-- Metric inputs generated here -->
+                </div>
+                <button type="submit" class="primary">Add City</button>
+            </form>
+        </section>
+
+        <!-- Edit City Section (Hidden by default) -->
+        <section id="edit-city-section" class="section">
+            <button onclick="showSection('details-section')" style="margin-bottom: 1rem;">&larr; Cancel</button>
+            <h2>Edit City</h2>
+            <form id="edit-city-form" onsubmit="handleEditCity(event)">
+                <input type="hidden" id="edit-city-id">
+                <div class="form-group">
+                    <label for="edit-city-name">City Name</label>
+                    <input type="text" id="edit-city-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-city-state">State (2 letters)</label>
+                    <input type="text" id="edit-city-state" maxlength="2" required style="text-transform: uppercase;">
+                </div>
+                <div id="edit-city-metrics" class="metrics-inputs">
+                    <!-- Metric inputs generated here -->
+                </div>
+                <button type="submit" class="primary">Update City</button>
+            </form>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
