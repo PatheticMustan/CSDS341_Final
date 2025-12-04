@@ -1,0 +1,24 @@
+{
+  "name": "csds341_final",
+  "version": "1.0.0",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PatheticMustan/CSDS341_Final.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/PatheticMustan/CSDS341_Final/issues"
+  },
+  "homepage": "https://github.com/PatheticMustan/CSDS341_Final#readme",
+  "description": "",
+  "dependencies": {
+    "better-sqlite3": "^12.4.6",
+    "express": "^5.1.0"
+  }
+}
