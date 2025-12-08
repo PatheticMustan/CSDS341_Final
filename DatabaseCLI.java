@@ -9,6 +9,7 @@ public class DatabaseCLI {
     private static final String USER = "demo_user";
     private static final String PASSWORD = "demo";
 
+    // connect to the database using the url, user, and password
     public static Connection connect() {
         Connection conn = null;
         try {
@@ -20,6 +21,7 @@ public class DatabaseCLI {
         return conn;
     }
 
+    // run sql query to get all cities
     public static void getAllCities(Connection conn) {
         String view_all_cities_query = "SELECT name, state FROM city";
         try (Statement statement = conn.createStatement()) {
@@ -35,6 +37,7 @@ public class DatabaseCLI {
         }
     }
 
+    // function to get the industry stats for a specific city
     public static void getIndustryQuery(Connection conn, String city_name) {
         String specific_city_query =
                 """
@@ -76,6 +79,7 @@ public class DatabaseCLI {
         }
     }
 
+    // function to run sql query that gets the metrics for a given city
     public static void getMetricQuery(Connection conn, String city_name, char metric_option) {
         String specific_metric_query =
                 """
@@ -126,6 +130,7 @@ public class DatabaseCLI {
         }
     }
 
+    // get the ranking of all cities for a given metric
     public static void getRanking(Connection conn, char metric_option) {
         int metric_id = 0;
         Boolean first = true;
@@ -182,6 +187,7 @@ public class DatabaseCLI {
         }
     }
 
+    // print all users and their corresponding preferences
     public static void getUsers(Connection conn) {
         String view_all_cities_query =
         """
@@ -217,6 +223,73 @@ public class DatabaseCLI {
         }
     }
 
+    // get the top ranked city for a user given their preference profile
+    public static void getUserRanking(Connection conn, String first_name, String last_name) {
+
+        String get_user_preference_profile =
+                """
+                SELECT profile_id
+                FROM app_user, preferenceprofile
+                WHERE app_user.first_name = ?
+                AND app_user.last_name = ?
+                AND app_user.user_id = preferenceprofile.user_id;
+                """;
+
+        int preference_id = -1;
+
+        try {
+            PreparedStatement statement = conn.prepareStatement(get_user_preference_profile);
+            statement.setString(1, first_name);
+            statement.setString(2, last_name);
+            ResultSet rs = statement.executeQuery();
+            if (!rs.next()) {
+                System.out.println("No such user with " + first_name + " " + last_name);
+                return;
+            }
+            do {
+                preference_id = rs.getInt("profile_id");
+            } while (rs.next()) ;
+        } catch (SQLException e) {
+            System.out.print("User Search Failed.");
+            e.printStackTrace();
+        }
+
+        String view_all_cities_query =
+                """
+                with q as (
+                    SELECT c.name, c.state, rank()
+                        OVER(
+                            PARTITION BY m.metric_id ORDER BY cmv.value
+                        ) * pw.weight as weighted_rank
+                    FROM metric m, city c, citymetricvalue cmv, preferenceweight pw
+                    WHERE (cmv.city_id = c.city_id) AND (cmv.metric_id = m.metric_id)
+                    AND (m.metric_id = pw.metric_id) AND (pw.profile_id = ?)
+                )
+                SELECT q.name, q.state, SUM(q.weighted_rank) as score
+                FROM q
+                GROUP BY q.name, q.state
+                ORDER BY score;
+                """;
+
+        try (PreparedStatement statement = conn.prepareStatement(view_all_cities_query)) {
+            statement.setInt(1, preference_id);
+            ResultSet rs = statement.executeQuery();
+            if (!rs.next()) {
+                System.out.println("Error with city ranking query");
+                return;
+            }
+            String city_name = rs.getString("name");
+            String city_state = rs.getString("state");
+
+            System.out.println(city_name + ", " + city_state);
+
+        } catch (SQLException e) {
+            System.out.print("City Rank Weighting Failed.");
+            e.printStackTrace();
+        }
+    }
+
+    // update the information of a given city
     public static void updateInformation(Connection conn, Scanner scanner) {
         System.out.println(
                 "Would you like to update \n" +
@@ -340,6 +413,7 @@ public class DatabaseCLI {
         }
     }
 
+    // insert a new city into the db
     public static void insertNewCity(Connection conn, Scanner scanner) {
         Savepoint savepoint = null;
         try {
@@ -350,6 +424,7 @@ public class DatabaseCLI {
             return;
         }
 
+        // get city and state name
         System.out.println("Enter City Name: ");
         String city_name = scanner.nextLine();
         System.out.println("Enter City State [2 Char Code]: ");
@@ -380,6 +455,7 @@ public class DatabaseCLI {
         }
 
 
+        // get the id of the new city
         String get_city_id =
                 """
                 SELECT city_id FROM city WHERE name = ? AND state = ?;
@@ -427,6 +503,7 @@ public class DatabaseCLI {
             return;
         }
 
+        // add the city metrics for the new city
         String insert_into_city_metrics =
                 """
                 INSERT INTO CityMetricValue VALUES
@@ -545,6 +622,7 @@ public class DatabaseCLI {
 
     }
 
+    // insert a new user into the db
     public static void insertNewUser(Connection conn, Scanner scanner) {
         Savepoint savepoint = null;
         try {
@@ -590,6 +668,7 @@ public class DatabaseCLI {
             return;
         }
 
+        // insert the user's weighted preferences
         double fmr1b;
         double fmr2b;
         double act;
@@ -716,6 +795,7 @@ public class DatabaseCLI {
             } else if (choice[0] == 'a') {
                 getAllCities(conn);
             } else if (choice[0] == 's') {
+                // choose what info to get about a city
                 System.out.println(
                         "Would you like to \n" +
                                 "i : Get Industry Statistics\n" +
@@ -743,6 +823,7 @@ public class DatabaseCLI {
                     System.out.print("Invalid choice. Please try again.\n");
                 }
             } else if (choice[0] == 'r') {
+                // choose what metric to rank the cities on
                 System.out.println(
                         "Would you like to see the rankings for \n" +
                                 "1 : Fair Market Rent (1-Bedroom)\n" +
@@ -790,7 +871,30 @@ public class DatabaseCLI {
                     return;
                 }
             } else if (choice[0] == 'u') {
-                getUsers(conn);
+                System.out.println(
+                        "Would you like to \n" +
+                                "u : See All Users\n" +
+                                "r : See Top Ranked City For a User\n"
+                );
+                System.out.print("Enter choice: ");
+                char[] second_choice = scanner.nextLine().toCharArray();
+                if (second_choice[0] == 'u') {
+                    getUsers(conn);
+                } else if (second_choice[0] == 'r') {
+                    System.out.print(
+                            "User first name: "
+                    );
+                    String first_name = scanner.nextLine();
+                    System.out.print(
+                            "User last name: "
+                    );
+                    String last_name = scanner.nextLine();
+                    getUserRanking(conn, first_name, last_name);
+                } else {
+                    System.out.print("Invalid choice. Please try again.\n");
+                }
+
+
             } else {
                 System.out.print("Invalid choice");
             }
