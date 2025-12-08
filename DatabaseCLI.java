@@ -1,11 +1,10 @@
 import java.sql.*;
 import java.util.Scanner;
 
-
 public class DatabaseCLI {
 
     // great programming practice
-    private static final String URL = "jdbc:postgresql://localhost:5432/cli_db";
+    private static final String URL = "jdbc:postgresql://localhost:5432/postgres";
     private static final String USER = "demo_user";
     private static final String PASSWORD = "demo";
 
@@ -13,9 +12,15 @@ public class DatabaseCLI {
     public static Connection connect() {
         Connection conn = null;
         try {
+            Class.forName("org.postgresql.Driver");
             conn = DriverManager.getConnection(URL, USER, PASSWORD);
+        } catch (ClassNotFoundException e) {
+            System.out.println(
+                    "PostgreSQL JDBC Driver not found. Please ensure the postgresql-*.jar is in your classpath.");
+            e.printStackTrace();
         } catch (SQLException e) {
-            System.out.println("Connection failure.");
+            System.out.println(
+                    "Connection failure. Check if the database 'postgres' exists and credentials are correct.");
             e.printStackTrace();
         }
         return conn;
@@ -39,8 +44,7 @@ public class DatabaseCLI {
 
     // function to get the industry stats for a specific city
     public static void getIndustryQuery(Connection conn, String city_name) {
-        String specific_city_query =
-                """
+        String specific_city_query = """
                         SELECT c.name, c.state, i.name as industryName, cis.median_salary, cis.num_job_openings, cis.growth_outlook_score
                         FROM cityindustrystats cis, city c, industry i
                         WHERE (cis.city_id = c.city_id) AND (cis.industry_id = i.industry_id) and (c.name = ?);
@@ -71,7 +75,7 @@ public class DatabaseCLI {
                     output.append("\nNum Job Openings: ").append(num_job_openings);
                     output.append("\nGrowth Outlook Score: ").append(growth_outlook_score);
                     System.out.println(output.toString());
-                } while (rs.next()) ;
+                } while (rs.next());
             }
         } catch (SQLException e) {
             System.out.print("Prepared Statement Construction Failed.\n");
@@ -81,8 +85,7 @@ public class DatabaseCLI {
 
     // function to run sql query that gets the metrics for a given city
     public static void getMetricQuery(Connection conn, String city_name, char metric_option) {
-        String specific_metric_query =
-                """
+        String specific_metric_query = """
                         SELECT c.name, c.state, m.name as metricName, cmv.value, cmv.year
                         FROM metric m, city c, citymetricvalue cmv
                         WHERE (cmv.city_id = c.city_id) AND (cmv.metric_id = m.metric_id) AND (c.name = ?)
@@ -122,7 +125,7 @@ public class DatabaseCLI {
                     output.append(mname);
                     output.append(": ").append(value);
                     System.out.println(output.toString());
-                } while (rs.next()) ;
+                } while (rs.next());
             }
         } catch (SQLException e) {
             System.out.print("Prepared Statement Construction Failed.");
@@ -143,8 +146,7 @@ public class DatabaseCLI {
             System.out.print("Please Enter a Valid Option.");
             return;
         }
-        String specific_ranking_query =
-                """
+        String specific_ranking_query = """
                 SELECT c.name, c.state, m.name as metric, cmv.value, rank()
                     OVER(order by cmv.value ASC) as rank
                 FROM metric m, city c, citymetricvalue cmv
@@ -179,7 +181,7 @@ public class DatabaseCLI {
                     output.append(cname).append(", ");
                     output.append(cstate).append(", ").append(value);
                     System.out.println(output.toString());
-                } while (rs.next()) ;
+                } while (rs.next());
             }
         } catch (SQLException e) {
             System.out.print("Prepared Statement Construction Failed.");
@@ -189,14 +191,13 @@ public class DatabaseCLI {
 
     // print all users and their corresponding preferences
     public static void getUsers(Connection conn) {
-        String view_all_cities_query =
-        """
-        SELECT first_name, last_name, profile_name, weight, m.name
-        FROM app_user, preferenceprofile, preferenceweight, metric m
-        WHERE app_user.user_id = preferenceprofile.user_id
-        AND preferenceprofile.profile_id = preferenceweight.profile_id
-        AND preferenceweight.metric_id = m.metric_id;
-        """;
+        String view_all_cities_query = """
+                SELECT first_name, last_name, profile_name, weight, m.name
+                FROM app_user, preferenceprofile, preferenceweight, metric m
+                WHERE app_user.user_id = preferenceprofile.user_id
+                AND preferenceprofile.profile_id = preferenceweight.profile_id
+                AND preferenceweight.metric_id = m.metric_id;
+                """;
         String last_user_printed = "";
         try (Statement statement = conn.createStatement()) {
             ResultSet rs = statement.executeQuery(view_all_cities_query);
@@ -226,8 +227,7 @@ public class DatabaseCLI {
     // get the top ranked city for a user given their preference profile
     public static void getUserRanking(Connection conn, String first_name, String last_name) {
 
-        String get_user_preference_profile =
-                """
+        String get_user_preference_profile = """
                 SELECT profile_id
                 FROM app_user, preferenceprofile
                 WHERE app_user.first_name = ?
@@ -248,14 +248,13 @@ public class DatabaseCLI {
             }
             do {
                 preference_id = rs.getInt("profile_id");
-            } while (rs.next()) ;
+            } while (rs.next());
         } catch (SQLException e) {
             System.out.print("User Search Failed.");
             e.printStackTrace();
         }
 
-        String view_all_cities_query =
-                """
+        String view_all_cities_query = """
                 with q as (
                     SELECT c.name, c.state, rank()
                         OVER(
@@ -299,8 +298,7 @@ public class DatabaseCLI {
                         "4 : Average Annual Temperature\n" +
                         "5 : Median Salary\n" +
                         "6 : Num Job Openings\n" +
-                        "7 : Growth Outlook Score"
-        );
+                        "7 : Growth Outlook Score");
         char[] _update_choice;
         int update_choice;
         try {
@@ -315,8 +313,7 @@ public class DatabaseCLI {
 
         String city_choice = scanner.nextLine();
 
-        String get_city_id =
-                """
+        String get_city_id = """
                 SELECT city_id FROM city WHERE name = ?;
                 """;
 
@@ -336,10 +333,8 @@ public class DatabaseCLI {
             return;
         }
 
-
         if (update_choice <= 4 && update_choice >= 1) {
-            String update_field =
-                    """
+            String update_field = """
                     UPDATE citymetricvalue
                     SET value = ?
                     WHERE metric_id = ?
@@ -347,8 +342,7 @@ public class DatabaseCLI {
                     """;
 
             System.out.println(
-                    "What would you like to update it to?"
-            );
+                    "What would you like to update it to?");
             String _update_value = scanner.nextLine();
             double update_value = Double.parseDouble(_update_value);
 
@@ -368,8 +362,7 @@ public class DatabaseCLI {
                     "Would you like to update \n" +
                             "1 : Software Engineering\n" +
                             "2 : Data Science / Analytics\n" +
-                            "3 : Machine Learning / AI"
-            );
+                            "3 : Machine Learning / AI");
             char[] _industry_update_choice = scanner.nextLine().toCharArray();
             int industry_update_choice = Integer.parseInt(_industry_update_choice[0] + "");
 
@@ -383,13 +376,11 @@ public class DatabaseCLI {
             }
 
             System.out.println(
-                    "What would you like to update it to?"
-            );
+                    "What would you like to update it to?");
             String _industry_update_value = scanner.nextLine();
             int industry_update_value = Integer.parseInt(_industry_update_value);
 
-            String update_field =
-                    """
+            String update_field = """
                     UPDATE cityindustrystats
                     SET %s = ?
                     WHERE industry_id = ?
@@ -430,8 +421,7 @@ public class DatabaseCLI {
         System.out.println("Enter City State [2 Char Code]: ");
         String city_state = scanner.nextLine().substring(0, 2);
 
-        String create_new_city =
-                """
+        String create_new_city = """
                 INSERT INTO city (name, state)
                 VALUES (?, ?);
                 """;
@@ -454,10 +444,8 @@ public class DatabaseCLI {
             return;
         }
 
-
         // get the id of the new city
-        String get_city_id =
-                """
+        String get_city_id = """
                 SELECT city_id FROM city WHERE name = ? AND state = ?;
                 """;
 
@@ -504,8 +492,7 @@ public class DatabaseCLI {
         }
 
         // add the city metrics for the new city
-        String insert_into_city_metrics =
-                """
+        String insert_into_city_metrics = """
                 INSERT INTO CityMetricValue VALUES
                 (?, 1, ?, 2025),
                 (?, 2, ?, 2025),
@@ -542,8 +529,7 @@ public class DatabaseCLI {
             return;
         }
 
-        String insert_into_industry_metrics =
-                """
+        String insert_into_industry_metrics = """
                 INSERT INTO CityIndustryStats (city_id, industry_id, median_salary, num_job_openings, growth_outlook_score) VALUES
                     (?, 1, ?, ?, ?),
                     (?, 2, ?, ?, ?),
@@ -640,8 +626,7 @@ public class DatabaseCLI {
 
         int user_id = -1;
 
-        String create_new_user =
-                """
+        String create_new_user = """
                 INSERT INTO app_user (first_name, last_name)
                 VALUES (?, ?)
                 RETURNING user_id;
@@ -697,8 +682,7 @@ public class DatabaseCLI {
             return;
         }
 
-        String create_preference_profile =
-                """
+        String create_preference_profile = """
                 INSERT INTO preferenceprofile (user_id, profile_name)
                 VALUES (?, ?)
                 RETURNING profile_id;
@@ -728,8 +712,7 @@ public class DatabaseCLI {
             return;
         }
 
-        String insert_into_preference_weights =
-                """
+        String insert_into_preference_weights = """
                 INSERT INTO preferenceweight VALUES
                 (?, 1, ?),
                 (?, 2, ?),
@@ -767,16 +750,18 @@ public class DatabaseCLI {
         }
     }
 
-
-
-    public static void main(String[] args)  {
+    public static void main(String[] args) {
         Connection conn = connect();
+        if (conn == null) {
+            System.out.println("Could not establish database connection. Exiting...");
+            return;
+        }
         Scanner scanner = new Scanner(System.in);
         boolean loop = true;
 
         System.out.println("******* ENTER 'q' AT ANY TIME TO QUIT THE PROGRAM *******");
 
-        while(loop) {
+        while (loop) {
             System.out.println(
                     "Would you like to \n" +
                             "a : See List of All Cities\n" +
@@ -785,8 +770,7 @@ public class DatabaseCLI {
                             "u : Get User Information\n" +
                             "f : Update Information About a City\n" +
                             "n : Add New Information\n" +
-                            "q : Exit the program\n"
-            );
+                            "q : Exit the program\n");
             System.out.print("Enter choice: ");
             char[] choice = scanner.nextLine().toCharArray();
             // list all cities
@@ -801,8 +785,7 @@ public class DatabaseCLI {
                                 "i : Get Industry Statistics\n" +
                                 "r : Get Rent Statistics\n" +
                                 "m : Get Misc Statistics\n" +
-                                "q : Exit the program\n"
-                );
+                                "q : Exit the program\n");
                 System.out.print("Enter choice: ");
                 char[] second_choice = scanner.nextLine().toCharArray();
                 System.out.print("Enter city name: ");
@@ -829,8 +812,7 @@ public class DatabaseCLI {
                                 "1 : Fair Market Rent (1-Bedroom)\n" +
                                 "2 : Fair Market Rent (2-Bedroom)\n" +
                                 "3 : Average Commute Time\n" +
-                                "4 : Average Annual Temperature\n"
-                );
+                                "4 : Average Annual Temperature\n");
                 char[] second_choice = scanner.nextLine().toCharArray();
                 if (second_choice[0] == 'q') {
                     loop = false;
@@ -851,8 +833,7 @@ public class DatabaseCLI {
                 System.out.println(
                         "Would you like to \n" +
                                 "c : Add a New City\n" +
-                                "u : Add a New User\n"
-                );
+                                "u : Add a New User\n");
                 System.out.print("Enter choice: ");
                 char[] second_choice = scanner.nextLine().toCharArray();
                 if (second_choice[0] == 'c') {
@@ -874,26 +855,22 @@ public class DatabaseCLI {
                 System.out.println(
                         "Would you like to \n" +
                                 "u : See All Users\n" +
-                                "r : See Top Ranked City For a User\n"
-                );
+                                "r : See Top Ranked City For a User\n");
                 System.out.print("Enter choice: ");
                 char[] second_choice = scanner.nextLine().toCharArray();
                 if (second_choice[0] == 'u') {
                     getUsers(conn);
                 } else if (second_choice[0] == 'r') {
                     System.out.print(
-                            "User first name: "
-                    );
+                            "User first name: ");
                     String first_name = scanner.nextLine();
                     System.out.print(
-                            "User last name: "
-                    );
+                            "User last name: ");
                     String last_name = scanner.nextLine();
                     getUserRanking(conn, first_name, last_name);
                 } else {
                     System.out.print("Invalid choice. Please try again.\n");
                 }
-
 
             } else {
                 System.out.print("Invalid choice");

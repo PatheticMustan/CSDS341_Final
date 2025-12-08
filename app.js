@@ -1,68 +1,70 @@
 import express from 'express';
-import Database from 'better-sqlite3';
+import pg from 'pg';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+const { Pool } = pg;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = 5000;
 const app = express();
-const db = new Database('data.db', { verbose: console.log });
+
+// PostgreSQL connection pool
+// Defaults based on new_data_schema.sql
+const pool = new Pool({
+    user: 'demo_user',
+    host: 'localhost',
+    database: 'postgres',
+    password: 'demo',
+    port: 5432,
+});
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Get all cities
-app.get('/api/cities', (req, res) => {
+app.get('/api/cities', async (req, res) => {
     try {
-        const stmt = db.prepare('SELECT * FROM City');
-        const cities = stmt.all();
-        res.json(cities);
+        const result = await pool.query('SELECT * FROM City');
+        res.json(result.rows);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
 // Get specific city with metrics
-app.get('/api/cities/:id', (req, res) => {
+app.get('/api/cities/:id', async (req, res) => {
     try {
         const cityId = req.params.id;
-        const cityStmt = db.prepare('SELECT * FROM City WHERE city_id = ?');
-        const city = cityStmt.get(cityId);
+        const cityResult = await pool.query('SELECT * FROM City WHERE city_id = $1', [cityId]);
+        const city = cityResult.rows[0];
 
         if (!city) {
             return res.status(404).json({ error: 'City not found' });
         }
 
-        const metricsStmt = db.prepare(`
+        const metricsResult = await pool.query(`
             SELECT m.metric_id, m.name, m.unit, cmv.value, cmv.year
             FROM CityMetricValue cmv
             JOIN Metric m ON cmv.metric_id = m.metric_id
-            WHERE cmv.city_id = ?
-        `);
-        const metrics = metricsStmt.all(cityId);
+            WHERE cmv.city_id = $1
+        `, [cityId]);
 
-        res.json({ ...city, metrics });
+        res.json({ ...city, metrics: metricsResult.rows });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
 // Get rankings for a metric
-app.get('/api/rankings/:metric_id', (req, res) => {
+app.get('/api/rankings/:metric_id', async (req, res) => {
     try {
         const metricId = req.params.metric_id;
-        const stmt = db.prepare(`
-            SELECT c.name, c.state, cmv.value
-            FROM CityMetricValue cmv
-            JOIN City c ON cmv.city_id = c.city_id
-            WHERE cmv.metric_id = ?
-            ORDER BY cmv.value ASC
-        `);
 
-        const metricStmt = db.prepare('SELECT higher_is_better FROM Metric WHERE metric_id = ?');
-        const metric = metricStmt.get(metricId);
+        const metricResult = await pool.query('SELECT higher_is_better FROM Metric WHERE metric_id = $1', [metricId]);
+        const metric = metricResult.rows[0];
 
         if (!metric) {
             return res.status(404).json({ error: 'Metric not found' });
@@ -70,64 +72,69 @@ app.get('/api/rankings/:metric_id', (req, res) => {
 
         const order = metric.higher_is_better ? 'DESC' : 'ASC';
 
-        const rankingStmt = db.prepare(`
+        // Note: We can't use a parameter for the sort order (ASC/DESC), so we interpolate it safely.
+        // We validated 'metric' exists, so we know higher_is_better is boolean.
+        const query = `
             SELECT c.name, c.state, cmv.value
             FROM CityMetricValue cmv
             JOIN City c ON cmv.city_id = c.city_id
-            WHERE cmv.metric_id = ?
+            WHERE cmv.metric_id = $1
             ORDER BY cmv.value ${order}
-        `);
+        `;
 
-        const rankings = rankingStmt.all(metricId);
-        res.json(rankings);
+        const rankingsResult = await pool.query(query, [metricId]);
+        res.json(rankingsResult.rows);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
 // Get all metrics (helper)
-app.get('/api/metrics', (req, res) => {
+app.get('/api/metrics', async (req, res) => {
     try {
-        const stmt = db.prepare('SELECT * FROM Metric');
-        const metrics = stmt.all();
-        res.json(metrics);
+        const result = await pool.query('SELECT * FROM Metric');
+        res.json(result.rows);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
 // Add a new city
-app.post('/api/cities', (req, res) => {
+app.post('/api/cities', async (req, res) => {
+    const client = await pool.connect();
     try {
         const { name, state, metrics } = req.body;
         if (!name || !state || state.length !== 2) {
             return res.status(400).json({ error: 'Invalid input' });
         }
 
-        const insertCity = db.transaction(() => {
-            const stmt = db.prepare('INSERT INTO City (name, state) VALUES (?, ?)');
-            const info = stmt.run(name, state);
-            const cityId = info.lastInsertRowid;
+        await client.query('BEGIN');
 
-            if (metrics && Array.isArray(metrics)) {
-                const metricStmt = db.prepare('INSERT INTO CityMetricValue (city_id, metric_id, value, year) VALUES (?, ?, ?, ?)');
-                for (const m of metrics) {
-                    // Defaulting to year 2025 to match seed data
-                    metricStmt.run(cityId, m.metric_id, m.value, 2025);
-                }
+        const insertCityText = 'INSERT INTO City (name, state) VALUES ($1, $2) RETURNING city_id';
+        const insertCityResult = await client.query(insertCityText, [name, state]);
+        const cityId = insertCityResult.rows[0].city_id;
+
+        if (metrics && Array.isArray(metrics)) {
+            const insertMetricText = 'INSERT INTO CityMetricValue (city_id, metric_id, value, year) VALUES ($1, $2, $3, $4)';
+            for (const m of metrics) {
+                // Defaulting to year 2025 to match seed data
+                await client.query(insertMetricText, [cityId, m.metric_id, m.value, 2025]);
             }
-            return cityId;
-        });
+        }
 
-        const cityId = insertCity();
+        await client.query('COMMIT');
         res.json({ city_id: cityId, name, state });
     } catch (error) {
+        await client.query('ROLLBACK');
         res.status(500).json({ error: error.message });
+    } finally {
+        client.release();
     }
 });
 
 // Update city info
-app.put('/api/cities/:id', (req, res) => {
+app.put('/api/cities/:id', async (req, res) => {
+    const client = await pool.connect();
     try {
         const cityId = req.params.id;
         const { name, state, metrics } = req.body;
@@ -136,34 +143,39 @@ app.put('/api/cities/:id', (req, res) => {
             return res.status(400).json({ error: 'Invalid input' });
         }
 
-        const updateCity = db.transaction(() => {
-            const stmt = db.prepare('UPDATE City SET name = ?, state = ? WHERE city_id = ?');
-            const info = stmt.run(name, state, cityId);
+        await client.query('BEGIN');
 
-            if (info.changes === 0) {
-                throw new Error('City not found');
+        const updateCityText = 'UPDATE City SET name = $1, state = $2 WHERE city_id = $3';
+        const updateCityResult = await client.query(updateCityText, [name, state, cityId]);
+
+        if (updateCityResult.rowCount === 0) {
+            throw new Error('City not found');
+        }
+
+        if (metrics && Array.isArray(metrics)) {
+            // Using INSERT ... ON CONFLICT DO UPDATE
+            const upsertMetricText = `
+                INSERT INTO CityMetricValue (city_id, metric_id, value, year) 
+                VALUES ($1, $2, $3, 2025)
+                ON CONFLICT (city_id, metric_id, year)
+                DO UPDATE SET value = EXCLUDED.value
+            `;
+            for (const m of metrics) {
+                await client.query(upsertMetricText, [cityId, m.metric_id, m.value]);
             }
+        }
 
-            if (metrics && Array.isArray(metrics)) {
-                // Using INSERT OR REPLACE to handle both new and existing metric values for this year
-                const metricStmt = db.prepare(`
-                    INSERT OR REPLACE INTO CityMetricValue (city_id, metric_id, value, year) 
-                    VALUES (?, ?, ?, 2025)
-                `);
-                for (const m of metrics) {
-                    metricStmt.run(cityId, m.metric_id, m.value);
-                }
-            }
-        });
-
-        updateCity();
+        await client.query('COMMIT');
         res.json({ message: 'City updated successfully' });
     } catch (error) {
+        await client.query('ROLLBACK');
         if (error.message === 'City not found') {
             res.status(404).json({ error: 'City not found' });
         } else {
             res.status(500).json({ error: error.message });
         }
+    } finally {
+        client.release();
     }
 });
 

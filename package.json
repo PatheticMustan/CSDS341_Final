@@ -19,7 +19,7 @@
   "homepage": "https://github.com/PatheticMustan/CSDS341_Final#readme",
   "description": "",
   "dependencies": {
-    "better-sqlite3": "^12.4.6",
+    "pg": "^8.11.3",
     "express": "^5.1.0"
   }
 }
