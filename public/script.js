@@ -13,6 +13,8 @@ function showSection(sectionId) {
         loadMetrics();
     } else if (sectionId === 'add-city-section') {
         loadMetrics();
+    } else if (sectionId === 'users-section') {
+        loadUsers();
     }
 }
 
@@ -60,6 +62,23 @@ async function loadCityDetails(cityId) {
             </div>
         `;
 
+        // Append Industries if available
+        if (city.industries && city.industries.length > 0) {
+            let industryHtml = '<h3>Industry Statistics</h3><ul>';
+            city.industries.forEach(ind => {
+                industryHtml += `
+                    <li style="margin-bottom: 0.5rem;">
+                        <strong>${ind.name}</strong><br>
+                        Median Salary: $${Number(ind.median_salary).toLocaleString()}<br>
+                        Job Openings: ${Number(ind.num_job_openings).toLocaleString()}<br>
+                        Growth Score: ${ind.growth_outlook_score}/10
+                    </li>
+                `;
+            });
+            industryHtml += '</ul>';
+            detailsDiv.innerHTML += `<div style="margin-top: 1rem;">${industryHtml}</div>`;
+        }
+
         showSection('details-section');
     } catch (error) {
         console.error('Error loading city details:', error);
@@ -100,6 +119,7 @@ function generateMetricInputs(metrics, containerId) {
     // Only generate if metric inputs don't already exist
     if (container.querySelectorAll('input[type="number"]').length > 0) return;
 
+    // Since our seed data only has the 4 city-level metrics, just limit to those 4 for now
     // Filter to only show the 4 city-level metrics (metric_id 1-4)
     // 1: Fair Market Rent (1-Bedroom)
     // 2: Fair Market Rent (2-Bedroom)
@@ -119,7 +139,6 @@ function generateMetricInputs(metrics, containerId) {
     });
 }
 
-// Load Rankings
 async function loadRankings() {
     const metricId = document.getElementById('metric-select').value;
     if (!metricId) return;
@@ -262,8 +281,303 @@ async function handleEditCity(event) {
     }
 }
 
+// --- User & Profile Functions ---
+
+let currentSelectedUserId = null;
+
+async function loadUsers() {
+    try {
+        const response = await fetch(`${API_URL}/users`);
+        const users = await response.json();
+        const list = document.getElementById('users-list');
+        list.innerHTML = '';
+
+        if (users.length === 0) {
+            list.innerHTML = '<p>No users found.</p>';
+        }
+
+        users.forEach(user => {
+            const div = document.createElement('div');
+            div.className = 'user-card';
+            div.id = `user-card-${user.user_id}`;
+            div.innerHTML = `<span><strong>${user.first_name} ${user.last_name}</strong></span> <span style="color:#777; font-size:0.8rem;">ID: ${user.user_id}</span>`;
+            div.onclick = () => selectUser(user.user_id, user.first_name, user.last_name);
+            list.appendChild(div);
+        });
+
+        // unique ID handling for safety
+        if (!currentSelectedUserId) {
+            document.getElementById('profiles-container').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error loading users:', error);
+    }
+}
+
+async function selectUser(userId, fname, lname) {
+    currentSelectedUserId = userId;
+    document.getElementById('selected-user-name').textContent = `Profiles for ${fname} ${lname}`;
+    document.getElementById('profiles-container').style.display = 'block';
+    document.getElementById('profile-user-id').value = userId;
+
+    // Highlight selected using class
+    const list = document.getElementById('users-list');
+    Array.from(list.children).forEach(child => {
+        if (child.id === `user-card-${userId}`) {
+            child.classList.add('selected');
+        } else {
+            child.classList.remove('selected');
+        }
+    });
+
+    loadProfiles(userId);
+}
+
+async function handleAddUser(event) {
+    event.preventDefault();
+    const first_name = document.getElementById('user-first-name').value;
+    const last_name = document.getElementById('user-last-name').value;
+
+    try {
+        const response = await fetch(`${API_URL}/users`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ first_name, last_name })
+        });
+
+        if (response.ok) {
+            alert('User created!');
+            document.getElementById('add-user-form').reset();
+            showSection('users-section'); // Reloads users
+        } else {
+            alert('Error creating user');
+        }
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+async function loadProfiles(userId) {
+    const list = document.getElementById('profiles-list');
+    list.innerHTML = 'Loading...';
+    try {
+        const response = await fetch(`${API_URL}/users/${userId}/profiles`);
+        const profiles = await response.json();
+        list.innerHTML = '';
+
+        if (profiles.length === 0) {
+            list.innerHTML = '<p>No profiles found.</p>';
+            return;
+        }
+
+        profiles.forEach(profile => {
+            const li = document.createElement('li');
+            li.className = 'profile-card';
+
+            // Format weights display
+            let weightsHtml = '';
+            if (profile.weights && profile.weights.length) {
+                const weightStr = profile.weights
+                    .filter(w => w.weight !== null && w.name)
+                    .map(w => `<span style="display:inline-block; margin-right:10px; font-size:0.9rem; color:#555;">${w.name}: <strong>${w.weight}</strong></span>`)
+                    .join('');
+                weightsHtml = `<div class="profile-weights">${weightStr}</div>`;
+            }
+
+            const weightsSafe = encodeURIComponent(JSON.stringify(profile.weights || []));
+
+            li.innerHTML = `
+                <div class="profile-header">
+                    <span class="profile-title">${profile.profile_name}</span>
+                </div>
+                ${weightsHtml}
+                <div class="profile-actions">
+                    <button onclick="viewWeightedRankings(${profile.profile_id}, '${profile.profile_name}')" class="primary btn-sm">View Recommendations</button>
+                    <button onclick="editProfile(${profile.profile_id}, '${profile.profile_name}', '${weightsSafe}')" class="warning btn-sm">Edit</button>
+                    <button onclick="deleteProfile(${profile.profile_id})" class="danger btn-sm">Delete</button>
+                </div>
+            `;
+            list.appendChild(li);
+        });
+    } catch (error) {
+        list.textContent = 'Error loading profiles.';
+        console.error(error);
+    }
+}
+
+// Show Add Profile Form
+async function showAddProfileForm() {
+    if (!currentSelectedUserId) {
+        alert('Please select a user first');
+        return;
+    }
+
+    // Reset form state for "Add"
+    document.getElementById('profile-id').value = '';
+    document.getElementById('profile-name').value = '';
+
+    const formTitle = document.getElementById('form-title');
+    if (formTitle) formTitle.textContent = 'Create Preference Profile';
+
+    const saveBtn = document.getElementById('save-profile-btn');
+    if (saveBtn) saveBtn.textContent = 'Save Profile';
+
+    await generateWeightInputs();
+    showSection('add-profile-section');
+}
+
+// Helper to generate inputs
+async function generateWeightInputs(existingWeights = []) {
+    try {
+        const response = await fetch(`${API_URL}/metrics`);
+        const metrics = await response.json();
+        const cityMetrics = metrics.filter(m => m.metric_id >= 1 && m.metric_id <= 4);
+
+        const container = document.getElementById('profile-weights');
+        container.innerHTML = '';
+
+        cityMetrics.forEach(m => {
+            // Find existing weight if editing
+            let val = 0.25;
+            if (existingWeights.length > 0) {
+                const found = existingWeights.find(w => w.metric_id === m.metric_id);
+                if (found) val = found.weight;
+            }
+
+            const div = document.createElement('div');
+            div.className = 'form-group';
+            div.innerHTML = `
+                <label for="weight-${m.metric_id}">${m.name} Weight</label>
+                <input type="number" step="0.01" min="0" max="1" id="weight-${m.metric_id}" required value="${val}">
+            `;
+            container.appendChild(div);
+        });
+    } catch (error) {
+        console.error('Error fetching metrics for profile form', error);
+    }
+}
+
+// Edit Profile Setup
+async function editProfile(profileId, profileName, weightsEncoded) {
+    const weights = JSON.parse(decodeURIComponent(weightsEncoded));
+
+    document.getElementById('profile-id').value = profileId;
+    document.getElementById('profile-name').value = profileName;
+
+    const formTitle = document.getElementById('form-title');
+    if (formTitle) formTitle.textContent = 'Edit Preference Profile';
+
+    const saveBtn = document.getElementById('save-profile-btn');
+    if (saveBtn) saveBtn.textContent = 'Update Profile';
+
+    await generateWeightInputs(weights);
+    showSection('add-profile-section');
+}
+
+// Delete Profile
+async function deleteProfile(profileId) {
+    if (!confirm('Are you sure you want to delete this profile?')) return;
+
+    try {
+        const response = await fetch(`${API_URL}/profiles/${profileId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            loadProfiles(currentSelectedUserId);
+        } else {
+            alert('Failed to delete profile');
+        }
+    } catch (error) {
+        console.error(error);
+        alert('Error deleting profile');
+    }
+}
+
+// Add/Edit Profile Handler
+async function handleAddProfile(event) {
+    event.preventDefault();
+    const userId = document.getElementById('profile-user-id').value;
+    const profileId = document.getElementById('profile-id').value; // if present, it's an edit
+    const profileName = document.getElementById('profile-name').value;
+
+    // Collect weights
+    const weights = [];
+    [1, 2, 3, 4].forEach(id => {
+        const el = document.getElementById(`weight-${id}`);
+        if (el) {
+            weights.push({ metric_id: id, weight: parseFloat(el.value) });
+        }
+    });
+
+    try {
+        let response;
+        if (profileId) {
+            // Update
+            response = await fetch(`${API_URL}/profiles/${profileId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profile_name: profileName, weights })
+            });
+        } else {
+            // Create
+            response = await fetch(`${API_URL}/profiles`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, profile_name: profileName, weights })
+            });
+        }
+
+        if (response.ok) {
+            alert(profileId ? 'Profile updated!' : 'Profile added!');
+            document.getElementById('add-profile-form').reset();
+            showSection('users-section');
+            loadProfiles(userId);
+        } else {
+            alert('Error saving profile');
+        }
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+// View Weighted Rankings
+async function viewWeightedRankings(profileId, profileName) {
+    document.getElementById('weighted-rankings-title').textContent = `Recommended Cities for "${profileName}"`;
+    const list = document.getElementById('weighted-rankings-list');
+    list.innerHTML = 'Loading...';
+
+    showSection('weighted-rankings-section');
+
+    try {
+        const response = await fetch(`${API_URL}/weighted-rankings/${profileId}`);
+        const rankings = await response.json();
+
+        list.innerHTML = '';
+        if (rankings.length === 0) {
+            list.innerHTML = '<p>No data found.</p>';
+            return;
+        }
+
+        rankings.forEach((item, index) => {
+            const li = document.createElement('li');
+            li.className = 'ranking-item';
+            // Rank 1 is best, so index + 1
+            li.innerHTML = `
+                <span style="font-size: 1.2rem;">#${index + 1} <strong>${item.name}, ${item.state}</strong></span>
+                <span class="rank-value">Score: ${parseFloat(item.score).toFixed(2)} (Lower is better)</span>
+            `;
+            list.appendChild(li);
+        });
+    } catch (error) {
+        console.error(error);
+        list.innerHTML = 'Error loading rankings.';
+    }
+}
+
 // Initial load
 document.addEventListener('DOMContentLoaded', () => {
     loadCities();
 });
+
 

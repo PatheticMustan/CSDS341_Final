@@ -34,7 +34,7 @@ app.get('/api/cities', async (req, res) => {
     }
 });
 
-// Get specific city with metrics
+// Get specific city with metrics and industry stats
 app.get('/api/cities/:id', async (req, res) => {
     try {
         const cityId = req.params.id;
@@ -52,7 +52,18 @@ app.get('/api/cities/:id', async (req, res) => {
             WHERE cmv.city_id = $1
         `, [cityId]);
 
-        res.json({ ...city, metrics: metricsResult.rows });
+        const industryResult = await pool.query(`
+            SELECT i.industry_id, i.name, cis.median_salary, cis.num_job_openings, cis.growth_outlook_score
+            FROM CityIndustryStats cis
+            JOIN Industry i ON cis.industry_id = i.industry_id
+            WHERE cis.city_id = $1
+        `, [cityId]);
+
+        res.json({
+            ...city,
+            metrics: metricsResult.rows,
+            industries: industryResult.rows
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -71,9 +82,6 @@ app.get('/api/rankings/:metric_id', async (req, res) => {
         }
 
         const order = metric.higher_is_better ? 'DESC' : 'ASC';
-
-        // Note: We can't use a parameter for the sort order (ASC/DESC), so we interpolate it safely.
-        // We validated 'metric' exists, so we know higher_is_better is boolean.
         const query = `
             SELECT c.name, c.state, cmv.value
             FROM CityMetricValue cmv
@@ -165,6 +173,8 @@ app.put('/api/cities/:id', async (req, res) => {
             }
         }
 
+        // Not exactly what the CLI does, but close enough
+
         await client.query('COMMIT');
         res.json({ message: 'City updated successfully' });
     } catch (error) {
@@ -176,6 +186,172 @@ app.put('/api/cities/:id', async (req, res) => {
         }
     } finally {
         client.release();
+    }
+});
+
+// Get all users
+app.get('/api/users', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM app_user ORDER BY user_id');
+        res.json(result.rows);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Create a new user
+app.post('/api/users', async (req, res) => {
+    try {
+        const { first_name, last_name } = req.body;
+        const result = await pool.query(
+            'INSERT INTO app_user (first_name, last_name) VALUES ($1, $2) RETURNING *',
+            [first_name, last_name]
+        );
+        res.json(result.rows[0]);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get profiles for a user with their weights
+app.get('/api/users/:userId/profiles', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const query = `
+            SELECT pp.profile_id, pp.profile_name, pp.user_id,
+                   json_agg(
+                       json_build_object('metric_id', pw.metric_id, 'name', m.name, 'weight', pw.weight)
+                   ) as weights
+            FROM PreferenceProfile pp
+            LEFT JOIN PreferenceWeight pw ON pp.profile_id = pw.profile_id
+            LEFT JOIN Metric m ON pw.metric_id = m.metric_id
+            WHERE pp.user_id = $1
+            GROUP BY pp.profile_id
+            ORDER BY pp.profile_id
+        `;
+        const result = await pool.query(query, [userId]);
+        res.json(result.rows);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update a profile
+app.put('/api/profiles/:profileId', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { profileId } = req.params;
+        const { profile_name, weights } = req.body;
+
+        await client.query('BEGIN');
+
+        // Update name
+        await client.query(
+            'UPDATE PreferenceProfile SET profile_name = $1 WHERE profile_id = $2',
+            [profile_name, profileId]
+        );
+
+        // Update weights (Delete all and recreate)
+        if (weights && Array.isArray(weights)) {
+            await client.query('DELETE FROM PreferenceWeight WHERE profile_id = $1', [profileId]);
+
+            const insertWeightQuery = 'INSERT INTO PreferenceWeight (profile_id, metric_id, weight) VALUES ($1, $2, $3)';
+            for (const w of weights) {
+                await client.query(insertWeightQuery, [profileId, w.metric_id, w.weight]);
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ message: 'Profile updated' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
+// Delete a profile
+app.delete('/api/profiles/:profileId', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { profileId } = req.params;
+
+        await client.query('BEGIN');
+
+        // Manual Cascade Delete
+        await client.query('DELETE FROM PreferenceWeight WHERE profile_id = $1', [profileId]);
+        await client.query('DELETE FROM PreferenceProfile WHERE profile_id = $1', [profileId]);
+
+        await client.query('COMMIT');
+        res.json({ message: 'Profile deleted' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
+// Create a profile with weights
+app.post('/api/profiles', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { user_id, profile_name, weights } = req.body;
+        // weights expected to be array of structure { metric_id, weight }
+
+        await client.query('BEGIN');
+
+        const profileResult = await client.query(
+            'INSERT INTO PreferenceProfile (user_id, profile_name) VALUES ($1, $2) RETURNING profile_id',
+            [user_id, profile_name]
+        );
+        const profileId = profileResult.rows[0].profile_id;
+
+        if (weights && Array.isArray(weights)) {
+            const insertWeightQuery = 'INSERT INTO PreferenceWeight (profile_id, metric_id, weight) VALUES ($1, $2, $3)';
+            for (const w of weights) {
+                await client.query(insertWeightQuery, [profileId, w.metric_id, w.weight]);
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ profile_id: profileId, user_id, profile_name, weights });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
+// Get Weighted Rankings for a Profile
+// Implements the logic from DatabaseCLI.java getUserRanking
+app.get('/api/weighted-rankings/:profileId', async (req, res) => {
+    try {
+        const { profileId } = req.params;
+
+        // SQL Query directly adapted from DatabaseCLI.java lines 258-27
+        const query = `
+            WITH q AS (
+                SELECT c.name, c.state, 
+                    rank() OVER (PARTITION BY m.metric_id ORDER BY cmv.value ASC) * pw.weight as weighted_rank
+                FROM metric m, city c, citymetricvalue cmv, preferenceweight pw
+                WHERE (cmv.city_id = c.city_id) 
+                  AND (cmv.metric_id = m.metric_id)
+                  AND (m.metric_id = pw.metric_id) 
+                  AND (pw.profile_id = $1)
+            )
+            SELECT q.name, q.state, SUM(q.weighted_rank) as score
+            FROM q
+            GROUP BY q.name, q.state
+            ORDER BY score ASC;
+        `;
+
+        const result = await pool.query(query, [profileId]);
+        res.json(result.rows);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 

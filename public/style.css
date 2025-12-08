@@ -28,6 +28,7 @@ nav button {
     cursor: pointer;
     font-size: 1rem;
     margin: 0 0.5rem;
+    transition: background-color 0.2s;
 }
 
 nav button:hover {
@@ -37,21 +38,28 @@ nav button:hover {
 
 main {
     padding: 2rem;
-    max-width: 800px;
+    max-width: 900px;
     margin: 0 auto;
 }
 
 .section {
     display: none;
+    animation: fadeIn 0.3s;
 }
 
 .section.active {
     display: block;
 }
 
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
 h2 {
     border-bottom: 2px solid #0078d7;
     padding-bottom: 0.5rem;
+    color: #2c3e50;
 }
 
 ul {
@@ -59,63 +67,116 @@ ul {
     padding: 0;
 }
 
+/* Generic List Item Style */
 li {
     background: white;
     margin: 0.5rem 0;
     padding: 1rem;
-    border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    cursor: pointer;
-    transition: transform 0.2s;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
 li:hover {
     transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .form-group {
-    margin-bottom: 1rem;
+    margin-bottom: 1.2rem;
 }
 
 label {
     display: block;
     margin-bottom: 0.5rem;
-    font-weight: bold;
+    font-weight: 600;
+    color: #555;
 }
 
 input, select {
     width: 100%;
-    padding: 0.5rem;
-    border: 1px solid #ccc;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
     border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 1rem;
+}
+
+input:focus, select:focus {
+    border-color: #0078d7;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0,120,215,0.2);
+}
+
+/* Button Styles */
+button {
+    cursor: pointer;
+    font-size: 0.95rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 4px;
+    border: none;
+    transition: background-color 0.2s;
 }
 
 button.primary {
     background-color: #0078d7;
     color: white;
-    border: none;
-    padding: 0.75rem 1.5rem;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 1rem;
 }
 
 button.primary:hover {
     background-color: #005a9e;
 }
 
+button.secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+button.secondary:hover {
+    background-color: #5a6268;
+}
+
+button.warning {
+    background-color: #f0ad4e;
+    color: white;
+}
+
+button.warning:hover {
+    background-color: #ec971f;
+}
+
+button.danger {
+    background-color: #d9534f;
+    color: white;
+}
+
+button.danger:hover {
+    background-color: #c9302c;
+}
+
+.btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+}
+
+.btn-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Specific Component Styles */
 .city-details {
     background: white;
     padding: 2rem;
-    border-radius: 4px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .metric-item {
     display: flex;
     justify-content: space-between;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid #eee;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #f0f0f0;
 }
 
 .ranking-item {
@@ -127,4 +188,67 @@ button.primary:hover {
 .rank-value {
     font-weight: bold;
     color: #0078d7;
+    font-size: 1.1rem;
+}
+
+/* User & Profile Cards */
+.user-card {
+    background: white;
+    padding: 1rem;
+    border-radius: 6px;
+    border: 1px solid #eee;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.user-card:hover {
+    border-color: #0078d7;
+    background-color: #f8faff;
+}
+
+.user-card.selected {
+    border-color: #0078d7;
+    background-color: #e6f7ff;
+    box-shadow: 0 0 0 2px rgba(0,120,215,0.1);
+}
+
+.profile-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.profile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.profile-title {
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.profile-weights {
+    font-size: 0.9rem;
+    color: #666;
+    background-color: #f9f9f9;
+    padding: 0.5rem;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+}
+
+.profile-actions {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
 }
