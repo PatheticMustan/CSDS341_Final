@@ -14,7 +14,8 @@
     </header>
     <nav>
         <button onclick="showSection('list-section')">All Cities</button>
-        <button onclick="showSection('rankings-section')">Rankings</button>
+        <button onclick="showSection('rankings-section')">Global Rankings</button>
+        <button onclick="showSection('users-section')">User Preferences</button>
         <button onclick="showSection('add-city-section')">Add City</button>
     </nav>
 
@@ -61,8 +62,75 @@
                 <div id="add-city-metrics" class="metrics-inputs">
                     <!-- Metric inputs generated here -->
                 </div>
+                <!-- TODO: Add Industry Inputs if time permits to query 'add-city-industries' -->
                 <button type="submit" class="primary">Add City</button>
             </form>
+        </section>
+
+        <!-- Users Section -->
+        <section id="users-section" class="section">
+            <h2>Users & Preferences</h2>
+            <button class="primary" onclick="showSection('add-user-section')">Create New User</button>
+            <div id="users-list" class="list-container">
+                <!-- Users will be populated here -->
+            </div>
+            <div id="profiles-container"
+                style="display:none; margin-top: 2rem; border-top: 1px solid #ccc; padding-top: 1rem;">
+                <h3 id="selected-user-name">Profiles for User</h3>
+                <button class="secondary" onclick="showAddProfileForm()">Add New Profile</button>
+                <ul id="profiles-list">
+                    <!-- Profiles will be populated here -->
+                </ul>
+            </div>
+        </section>
+
+        <!-- Add User Section -->
+        <section id="add-user-section" class="section">
+            <button onclick="showSection('users-section')" style="margin-bottom: 1rem;">&larr; Back to Users</button>
+            <h2>Create User</h2>
+            <form id="add-user-form" onsubmit="handleAddUser(event)">
+                <div class="form-group">
+                    <label for="user-first-name">First Name</label>
+                    <input type="text" id="user-first-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-last-name">Last Name</label>
+                    <input type="text" id="user-last-name" required>
+                </div>
+                <button type="submit" class="primary">Create User</button>
+            </form>
+        </section>
+
+        <!-- Add Profile Section -->
+        <section id="add-profile-section" class="section">
+            <button onclick="showSection('users-section')" style="margin-bottom: 1rem;">&larr; Cancel</button>
+            <h2 id="form-title">Create Preference Profile</h2>
+            <form id="add-profile-form" onsubmit="handleAddProfile(event)">
+                <input type="hidden" id="profile-user-id">
+                <input type="hidden" id="profile-id">
+                <div class="form-group">
+                    <label for="profile-name">Profile Name</label>
+                    <input type="text" id="profile-name" required placeholder="e.g. Low Rent, Warm Weather">
+                </div>
+                <h3>Metric Weights (0.0 - 1.0)</h3>
+                <p class="hint">Higher weight means this metric is more important. The sum does not strictly need to be
+                    1.0 but it's good practice.</p>
+                <div id="profile-weights" class="metrics-inputs">
+                    <!-- Inputs for weights will be generated for metrics 1-4 -->
+                </div>
+                <button type="submit" class="primary" id="save-profile-btn">Save Profile</button>
+            </form>
+        </section>
+
+        <!-- Weighted Rankings Section -->
+        <section id="weighted-rankings-section" class="section">
+            <button onclick="showSection('users-section')" style="margin-bottom: 1rem;">&larr; Back to User
+                Profiles</button>
+            <h2 id="weighted-rankings-title">Recommended Cities</h2>
+            <p>Based on your weighted preferences (Rank 1 is best match)</p>
+            <ul id="weighted-rankings-list">
+                <!-- Weighted rankings will be populated here -->
+            </ul>
         </section>
 
         <!-- Edit City Section (Hidden by default) -->
